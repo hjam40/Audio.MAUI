@@ -85,7 +85,6 @@ In your Package.appxmanifest file (Platforms\Windows) go to Capabilities and mar
 
 For more information on permissions, see the [Microsoft Docs](https://docs.microsoft.com/dotnet/maui/platform-integration/appmodel/permissions).
 
-    ```
 
 ### Using AudioController
 
