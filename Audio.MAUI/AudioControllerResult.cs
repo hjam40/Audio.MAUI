@@ -14,5 +14,8 @@ public enum AudioControllerResult
     ErrorCreatingRecorder,
     ErrorCreatingPlayer,
     NotInCorrectStatus,
-    PlayerNotInitiated
+    PlayerNotInitiated,
+    MicrophoneNotSelected,
+    FormatNotSupported,
+    AudioConfigurationError
 }

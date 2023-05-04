@@ -5,6 +5,8 @@ using Windows.Media.Devices;
 using Windows.Media.Playback;
 using Windows.Media.Core;
 using Windows.Storage;
+using Windows.Foundation.Metadata;
+using System.Runtime.Versioning;
 
 namespace Audio.MAUI;
 
@@ -22,6 +24,9 @@ public partial class AudioController : IAudioController
         Microphones.Clear();
         foreach (var device in aDevices)
             Microphones.Add(new MicrophoneInfo { Name = device.Name, DeviceId = device.Id });
+        Microphone = Microphones.FirstOrDefault();
+        OnPropertyChanged(nameof(Microphones));
+        OnPropertyChanged(nameof(Microphone));
     }
     private bool StartRec(string file)
     {
@@ -33,13 +38,27 @@ public partial class AudioController : IAudioController
                 MemoryPreference = MediaCaptureMemoryPreference.Cpu,
                 AudioDeviceId = Microphone.DeviceId
             }).GetAwaiter().GetResult();
-            MediaEncodingProfile profile = MediaEncodingProfile.CreateMp3(
-                RecordConfiguration.Quality switch
-                {
-                    AudioQuality.High => AudioEncodingQuality.High,
-                    AudioQuality.Medium => AudioEncodingQuality.Medium,
-                    _ => AudioEncodingQuality.Low
-                });
+            MediaEncodingProfile profile;
+            if (RecordConfiguration.AudioFormat == AudioFormat.M4A)
+            {
+                profile = MediaEncodingProfile.CreateM4a(
+                    RecordConfiguration.Quality switch
+                    {
+                        AudioQuality.High => AudioEncodingQuality.High,
+                        AudioQuality.Medium => AudioEncodingQuality.Medium,
+                        _ => AudioEncodingQuality.Low
+                    });
+            }
+            else
+            {
+                profile = MediaEncodingProfile.CreateWav(
+                    RecordConfiguration.Quality switch
+                    {
+                        AudioQuality.High => AudioEncodingQuality.High,
+                        AudioQuality.Medium => AudioEncodingQuality.Medium,
+                        _ => AudioEncodingQuality.Low
+                    });
+            }
             profile.Audio.SampleRate = RecordConfiguration.SampleRate;
             profile.Audio.BitsPerSample = RecordConfiguration.BitDepth;
             profile.Audio.ChannelCount = RecordConfiguration.Channels;
@@ -130,5 +149,9 @@ public partial class AudioController : IAudioController
     private TimeSpan GetPlayTime()
     {
         return audioPlayer.Position;
+    }
+    private void SeekToPosition(TimeSpan position)
+    {
+        audioPlayer.Position = position;
     }
 }

@@ -25,14 +25,15 @@ public partial class AudioController : IAudioController
 
     private bool StartRec(string file)
     {
-        bool result = true;
         if (File.Exists(file)) File.Delete(file);
         File.Create(file).Close();
-        //foreach (var type in new AudioFormatType[] { AudioFormatType.LinearPCM, AudioFormatType.AppleIMA4, AudioFormatType.MPEG4AAC, AudioFormatType.MACE3, AudioFormatType.MACE6, AudioFormatType.ULaw, AudioFormatType.ALaw, AudioFormatType.MPEGLayer1, AudioFormatType.MPEGLayer2, AudioFormatType.MPEGLayer3, AudioFormatType.AppleLossless })
-        //{
         var settings = new AudioSettings()
         {
-            Format = AudioFormatType.LinearPCM,
+            Format = RecordConfiguration.AudioFormat switch
+            {
+                AudioFormat.M4A => AudioFormatType.MPEG4AAC,
+                _ => AudioFormatType.LinearPCM
+            },
             LinearPcmBitDepth = (int)RecordConfiguration.BitDepth,
             AudioQuality = RecordConfiguration.Quality switch
             {
@@ -43,19 +44,19 @@ public partial class AudioController : IAudioController
             SampleRate = RecordConfiguration.SampleRate,
             NumberChannels = (int)RecordConfiguration.Channels
         };
-            recorder = AVAudioRecorder.Create(NSUrl.FromFilename(file), settings, out NSError error);
-        
-//            System.Diagnostics.Debug.WriteLine(type+" "+error?.Description);
- //       }
-        
+        recorder = AVAudioRecorder.Create(NSUrl.FromFilename(file), settings, out NSError error);
+        bool result;
         if (error is null)
         {
+            var session = AVAudioSession.SharedInstance();
+            session.SetCategory(AVAudioSessionCategory.Record);
             result = recorder.PrepareToRecord();
             if (result)
                 recorder.Record();
-        }else
+        }
+        else
             result = false;
-        
+
         return result;
     }
     private void PauseRec()
@@ -85,6 +86,8 @@ public partial class AudioController : IAudioController
         player = new AVAudioPlayer(NSUrl.FromFilename(file), null, out NSError error);
         if (error is null)
         {
+            var session = AVAudioSession.SharedInstance();
+            session.SetCategory(AVAudioSessionCategory.Playback);
             player.PrepareToPlay();
             player.FinishedPlaying += Player_FinishedPlaying;
             player.EnableRate = true;
@@ -116,6 +119,7 @@ public partial class AudioController : IAudioController
     private void StopPlayer()
     {
         player.Stop();
+        player.CurrentTime = 0;
     }
     private void SetVolume()
     {
@@ -133,5 +137,10 @@ public partial class AudioController : IAudioController
     {
         return TimeSpan.FromSeconds(player.CurrentTime);
     }
+    private void SeekToPosition(TimeSpan position)
+    {
+        player.CurrentTime = position.TotalSeconds;
+    }
+
 }
 #endif

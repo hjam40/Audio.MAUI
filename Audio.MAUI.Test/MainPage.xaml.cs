@@ -4,37 +4,50 @@ namespace Audio.MAUI.Test
 {
     public partial class MainPage : ContentPage
     {
-        AudioController aController;
+        readonly AudioController aController;
+        string file = "";
 
         public MainPage()
         {
             InitializeComponent();
             aController = new AudioController();
             micPicker.BindingContext = aController;
+
             micPicker.SetBinding(Picker.ItemsSourceProperty, nameof(aController.Microphones));
-            micPicker.SetBinding(Picker.SelectedItemProperty, nameof(aController.Microphone), mode:BindingMode.TwoWay);
+            micPicker.SetBinding(Picker.SelectedItemProperty, nameof(aController.Microphone), mode: BindingMode.TwoWay);
         }
 
-        private void Button_Clicked(object sender, EventArgs e)
+        private async void Button_Clicked(object sender, EventArgs e)
         {
-            var result = aController.StartRecord(Path.Combine(FileSystem.Current.CacheDirectory, "prueba.wav"));
+            file = Path.Combine(FileSystem.Current.CacheDirectory, "prueba.wav");
+            aController.RecordConfiguration.AudioFormat = AudioFormat.WAV;
+            aController.RecordConfiguration.Channels = 2;
+            var result = await aController.StartRecordAsync(file);
+            Debug.WriteLine("Start recording result " + result.ToString());
+        }
+        private async void Button_Clicked_8(object sender, EventArgs e)
+        {
+            file = Path.Combine(FileSystem.Current.CacheDirectory, "prueba.mp4");
+            aController.RecordConfiguration.AudioFormat = AudioFormat.M4A;
+            aController.RecordConfiguration.Channels = 2;
+            var result = await aController.StartRecordAsync(file);
             Debug.WriteLine("Start recording result " + result.ToString());
         }
 
         private void Button_Clicked_1(object sender, EventArgs e)
         {
-            aController.PauseRecord();
+            aController.PauseRecordAsync();
         }
 
         private void Button_Clicked_2(object sender, EventArgs e)
         {
-            aController.ResumeRecord();
+            aController.ResumeRecordAsync();
         }
 
-        private void Button_Clicked_3(object sender, EventArgs e)
+        private async void Button_Clicked_3(object sender, EventArgs e)
         {
-            aController.StopRecord();
-            var result = aController.NewPlay(Path.Combine(FileSystem.Current.CacheDirectory, "prueba.wav"));
+            await aController.StopRecordAsync();
+            var result = aController.NewPlay(file);
             Debug.WriteLine("New Play result " + result.ToString());
         }
 

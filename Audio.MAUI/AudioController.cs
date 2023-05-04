@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Runtime.Versioning;
 using System.Windows.Markup;
 
 namespace Audio.MAUI;
@@ -10,7 +11,7 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
     /// </summary>
     public List<MicrophoneInfo> Microphones { get; private set; } = new List<MicrophoneInfo>();
     /// <summary>
-    /// Set the microphone to use by the controler.
+    /// Set the microphone to use by the controler. Only available for Windows
     /// </summary>
     public MicrophoneInfo Microphone { get; set; }
     /// <summary>
@@ -33,7 +34,7 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
     }
     private double playSpeed = 1;
     /// <summary>
-    /// Set the speep for audio playing
+    /// Set the speed for audio playing
     /// </summary>
     public double PlaySpeed
     {
@@ -60,7 +61,7 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
     }
     public delegate void AudioControllerStatusChangedHandler(object sender, AudioControllerStatusChangedEventArgs args);
     /// <summary>
-    /// Invoked every time the controller Status change
+    /// Invoked every time the controller Status changes
     /// </summary>
     public event AudioControllerStatusChangedHandler StatusChanged;
     private bool playerInit = false;
@@ -81,68 +82,97 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
 
     public AudioController()
     {
-        InitDevices();
-        OnPropertyChanged(nameof(Microphones));
-        OnPropertyChanged(nameof(Microphone));
+        InitDevices();        
         timer = new(100);
         timer.Elapsed += Timer_Elapsed;
     }
-
-    public AudioControllerResult StartRecord(string file)
+    /// <summary>
+    /// Start recording an audio file async. "RecordConfiguration" property must not be null.
+    /// <paramref name="file"/> Full path to file where audio will be stored.
+    /// </summary>
+    public async Task<AudioControllerResult> StartRecordAsync(string file)
     {
-        if (Status == AudioControllerStatus.Idle)
+        if (RecordConfiguration != null)
         {
-            if (RequestPermissions().GetAwaiter().GetResult())
+            if (Status == AudioControllerStatus.Idle)
             {
-                if (StartRec(file))
+                if (DeviceInfo.Current.Platform == DevicePlatform.WinUI && Microphone == null)
+                    return AudioControllerResult.MicrophoneNotSelected;
+                if (await RequestPermissions())
                 {
-                    ElapsedTime = TimeSpan.Zero;
-                    OnPropertyChanged(nameof(ElapsedTime));
-                    timer.Start();
-                    Status = AudioControllerStatus.Recording;
-                    StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Idle, Status));
-                    return AudioControllerResult.Success;
+                    if (StartRec(file))
+                    {
+                        ElapsedTime = TimeSpan.Zero;
+                        OnPropertyChanged(nameof(ElapsedTime));
+                        timer.Start();
+                        Status = AudioControllerStatus.Recording;
+                        StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Idle, Status));
+                        return AudioControllerResult.Success;
+                    }
+                    else
+                        return AudioControllerResult.ErrorCreatingRecorder;
                 }
-                else
-                    return AudioControllerResult.ErrorCreatingRecorder;
+                return AudioControllerResult.AccessDenied;
             }
-            return AudioControllerResult.AccessDenied;
+            else
+                return AudioControllerResult.NotInCorrectStatus;
         }
         else
-            return AudioControllerResult.NotInCorrectStatus;
-
+            return AudioControllerResult.AudioConfigurationError;
     }
-    public void PauseRecord()
+    /// <summary>
+    /// Pause the current recording async.
+    /// </summary>
+    public Task PauseRecordAsync()
     {
-        if (Status == AudioControllerStatus.Recording)
+        return Task.Run(() =>
         {
-            PauseRec();
-            timer.Stop();
-            Status = AudioControllerStatus.PauseRecording;
-            StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Recording, Status));
-        }
+            if (Status == AudioControllerStatus.Recording)
+            {
+                PauseRec();
+                timer.Stop();
+                Status = AudioControllerStatus.PauseRecording;
+                StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Recording, Status));
+            }
+        });
     }
-    public void ResumeRecord()
+    /// <summary>
+    /// Resume the current recording async from pause state.
+    /// </summary>
+    public Task ResumeRecordAsync()
     {
-        if (Status == AudioControllerStatus.PauseRecording)
+        return Task.Run(() =>
         {
-            ResumeRec();
-            timer.Start();
-            Status = AudioControllerStatus.Recording;
-            StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.PauseRecording, Status));
-        }
+            if (Status == AudioControllerStatus.PauseRecording)
+            {
+                ResumeRec();
+                timer.Start();
+                Status = AudioControllerStatus.Recording;
+                StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.PauseRecording, Status));
+            }
+        });
     }
-    public void StopRecord()
+    /// <summary>
+    /// Stop the current recording async.
+    /// </summary>
+    public Task StopRecordAsync()
     {
-        if (Status == AudioControllerStatus.Recording || Status == AudioControllerStatus.PauseRecording)
+        return Task.Run(() =>
         {
-            StopRec();
-            timer.Stop();
-            var oldStatus = Status;
-            Status = AudioControllerStatus.Idle;
-            StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(oldStatus, Status));
-        }
+            if (Status == AudioControllerStatus.Recording || Status == AudioControllerStatus.PauseRecording)
+            {
+                StopRec();
+                timer.Stop();
+                var oldStatus = Status;
+                Status = AudioControllerStatus.Idle;
+                StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(oldStatus, Status));
+            }
+        });
     }
+    /// <summary>
+    /// Initializes a new Player with the specific file.
+    /// <paramref name="file"/> Full path to the audio file.
+    /// </summary>
     public AudioControllerResult NewPlay(string file)
     {
         playerInit = false;
@@ -161,6 +191,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
         else
             return AudioControllerResult.FileNotFound;
     }
+    /// <summary>
+    /// Starts the current playback
+    /// </summary>
     public AudioControllerResult Play()
     {
         if (playerInit)
@@ -168,8 +201,6 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
             if (Status == AudioControllerStatus.Idle)
             {
                 PlayPlayer();
-                ElapsedTime = TimeSpan.Zero;
-                OnPropertyChanged(nameof(ElapsedTime));
                 timer.Start();
                 Status = AudioControllerStatus.Playing;
                 StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Idle, Status));
@@ -181,6 +212,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
         else
             return AudioControllerResult.PlayerNotInitiated;
     }
+    /// <summary>
+    /// Pause the current playback
+    /// </summary>
     public void Pause()
     {
         if (Status == AudioControllerStatus.Playing)
@@ -191,6 +225,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
             StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.Playing, Status));
         }
     }
+    /// <summary>
+    /// Resume the current playback
+    /// </summary>
     public void Resume()
     {
         if (Status == AudioControllerStatus.PausePlaying)
@@ -201,6 +238,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
             StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(AudioControllerStatus.PausePlaying, Status));
         }
     }
+    /// <summary>
+    /// Stops the current playback
+    /// </summary>
     public void Stop()
     {
         if (Status == AudioControllerStatus.Playing || Status == AudioControllerStatus.PausePlaying)
@@ -212,6 +252,14 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
             StatusChanged?.Invoke(this, new AudioControllerStatusChangedEventArgs(oldStatus, Status));
         }
     }
+    /// <summary>
+    /// Seeks the current playback to the time position indicated
+    /// <paramref name="position"/> Time position.
+    /// </summary>
+    public void SeekTo(TimeSpan position)
+    {
+        SeekToPosition(position);
+    }
     private void Timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
     {
         if (Status == AudioControllerStatus.Recording)
@@ -220,6 +268,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
             ElapsedTime = GetPlayTime();
         OnPropertyChanged(nameof(ElapsedTime));
     }
+    /// <summary>
+    /// Request permission for use the microphone
+    /// </summary>
     public static async Task<bool> RequestPermissions()
     {
         var status = await Permissions.CheckStatusAsync<Permissions.Microphone>();
@@ -280,6 +331,9 @@ public partial class AudioController : IAudioController, INotifyPropertyChanged
     private TimeSpan GetRecordTime()
     {
         return TimeSpan.Zero;
+    }
+    private void SeekToPosition(TimeSpan position)
+    {
     }
 #endif
 }

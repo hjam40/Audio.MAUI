@@ -6,14 +6,13 @@
 
     <ScrollView>
         <VerticalStackLayout Spacing="25" Padding="30,0" VerticalOptions="Center">
-            <local:MediaSeekBar WidthRequest="300" HeightRequest="50" BackgroundColor="Blue"/>
             <HorizontalStackLayout HorizontalOptions="Center">
                 <Label Text="Microphone: " VerticalOptions="Center"/>
                 <Picker x:Name="micPicker" />
-                
             </HorizontalStackLayout>
             <HorizontalStackLayout HorizontalOptions="Center">
-                <Button Text="Start" Clicked="Button_Clicked" />
+                <Button Text="Start Wav" Clicked="Button_Clicked" />
+                <Button Text="Start Mp4" Clicked="Button_Clicked_8" />
                 <Button Text="Pause" Clicked="Button_Clicked_1" />
                 <Button Text="Resume" Clicked="Button_Clicked_2" />
                 <Button Text="Stop" Clicked="Button_Clicked_3" />
